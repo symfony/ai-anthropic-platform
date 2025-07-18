@@ -13,14 +13,14 @@ namespace Symfony\AI\Platform\Bridge\Anthropic;
 
 use Symfony\AI\Platform\Exception\RuntimeException;
 use Symfony\AI\Platform\Model;
-use Symfony\AI\Platform\Response\RawHttpResponse;
-use Symfony\AI\Platform\Response\RawResponseInterface;
-use Symfony\AI\Platform\Response\ResponseInterface;
-use Symfony\AI\Platform\Response\StreamResponse;
-use Symfony\AI\Platform\Response\TextResponse;
-use Symfony\AI\Platform\Response\ToolCall;
-use Symfony\AI\Platform\Response\ToolCallResponse;
-use Symfony\AI\Platform\ResponseConverterInterface;
+use Symfony\AI\Platform\Result\RawHttpResult;
+use Symfony\AI\Platform\Result\RawResultInterface;
+use Symfony\AI\Platform\Result\ResultInterface;
+use Symfony\AI\Platform\Result\StreamResult;
+use Symfony\AI\Platform\Result\TextResult;
+use Symfony\AI\Platform\Result\ToolCall;
+use Symfony\AI\Platform\Result\ToolCallResult;
+use Symfony\AI\Platform\ResultConverterInterface;
 use Symfony\Component\HttpClient\Chunk\ServerSentEvent;
 use Symfony\Component\HttpClient\EventSourceHttpClient;
 use Symfony\Component\HttpClient\Exception\JsonException;
@@ -29,20 +29,20 @@ use Symfony\Contracts\HttpClient\ResponseInterface as HttpResponse;
 /**
  * @author Christopher Hertel <mail@christopher-hertel.de>
  */
-class ResponseConverter implements ResponseConverterInterface
+class ResultConverter implements ResultConverterInterface
 {
     public function supports(Model $model): bool
     {
         return $model instanceof Claude;
     }
 
-    public function convert(RawHttpResponse|RawResponseInterface $response, array $options = []): ResponseInterface
+    public function convert(RawHttpResult|RawResultInterface $result, array $options = []): ResultInterface
     {
         if ($options['stream'] ?? false) {
-            return new StreamResponse($this->convertStream($response->getRawObject()));
+            return new StreamResult($this->convertStream($result->getObject()));
         }
 
-        $data = $response->getRawData();
+        $data = $result->getData();
 
         if (!isset($data['content']) || [] === $data['content']) {
             throw new RuntimeException('Response does not contain any content');
@@ -60,15 +60,15 @@ class ResponseConverter implements ResponseConverterInterface
         }
 
         if ([] !== $toolCalls) {
-            return new ToolCallResponse(...$toolCalls);
+            return new ToolCallResult(...$toolCalls);
         }
 
-        return new TextResponse($data['content'][0]['text']);
+        return new TextResult($data['content'][0]['text']);
     }
 
-    private function convertStream(HttpResponse $response): \Generator
+    private function convertStream(HttpResponse $result): \Generator
     {
-        foreach ((new EventSourceHttpClient())->stream($response) as $chunk) {
+        foreach ((new EventSourceHttpClient())->stream($result) as $chunk) {
             if (!$chunk instanceof ServerSentEvent || '[DONE]' === $chunk->getData()) {
                 continue;
             }
