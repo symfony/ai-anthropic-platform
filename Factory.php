@@ -14,7 +14,11 @@ namespace Symfony\AI\Platform\Bridge\Anthropic;
 use Symfony\AI\Platform\Bridge\Anthropic\Contract\AnthropicContract;
 use Symfony\AI\Platform\Contract;
 use Symfony\AI\Platform\ModelCatalog\ModelCatalogInterface;
+use Symfony\AI\Platform\ModelRouter\CatalogBasedModelRouter;
+use Symfony\AI\Platform\ModelRouterInterface;
 use Symfony\AI\Platform\Platform;
+use Symfony\AI\Platform\Provider;
+use Symfony\AI\Platform\ProviderInterface;
 use Symfony\Component\HttpClient\EventSourceHttpClient;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
@@ -22,26 +26,50 @@ use Symfony\Contracts\HttpClient\HttpClientInterface;
 /**
  * @author Christopher Hertel <mail@christopher-hertel.de>
  */
-final class PlatformFactory
+final class Factory
 {
     /**
      * @param 'none'|'short'|'long' $cacheRetention
+     * @param non-empty-string      $name
      */
-    public static function create(
+    public static function createProvider(
         #[\SensitiveParameter] string $apiKey,
         ?HttpClientInterface $httpClient = null,
         ModelCatalogInterface $modelCatalog = new ModelCatalog(),
         ?Contract $contract = null,
         ?EventDispatcherInterface $eventDispatcher = null,
         string $cacheRetention = 'short',
-    ): Platform {
+        string $name = 'anthropic',
+    ): ProviderInterface {
         $httpClient = $httpClient instanceof EventSourceHttpClient ? $httpClient : new EventSourceHttpClient($httpClient);
 
-        return new Platform(
+        return new Provider(
+            $name,
             [new ModelClient($httpClient, $apiKey, $cacheRetention)],
             [new ResultConverter()],
             $modelCatalog,
             $contract ?? AnthropicContract::create(),
+            $eventDispatcher,
+        );
+    }
+
+    /**
+     * @param 'none'|'short'|'long' $cacheRetention
+     * @param non-empty-string      $name
+     */
+    public static function createPlatform(
+        #[\SensitiveParameter] string $apiKey,
+        ?HttpClientInterface $httpClient = null,
+        ModelCatalogInterface $modelCatalog = new ModelCatalog(),
+        ?Contract $contract = null,
+        ?EventDispatcherInterface $eventDispatcher = null,
+        string $cacheRetention = 'short',
+        string $name = 'anthropic',
+        ?ModelRouterInterface $modelRouter = null,
+    ): Platform {
+        return new Platform(
+            [self::createProvider($apiKey, $httpClient, $modelCatalog, $contract, $eventDispatcher, $cacheRetention, $name)],
+            $modelRouter ?? new CatalogBasedModelRouter(),
             $eventDispatcher,
         );
     }
